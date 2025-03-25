@@ -5,39 +5,63 @@ import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# 🎨 Dark Mode Styling
-GEN_API_KEY = "AIzaSyBj1BzzNCg6FOUeic8DTtU3uYNVMaDErQw"
-genai.configure(api_key=GEN_API_KEY)
+# ✨ Set Page Config
 st.set_page_config(page_title="MindEase 🧘‍♂️", layout="wide")
-dark_theme = """
+
+# 🌨️ Advanced Black Theme Styling
+black_theme = """
     <style>
     body {
-        background-color: #121212;
-        color: white;
-        font-family: 'Arial', sans-serif;
+        background: #000000;
+        color: #e0e0e0;
+        font-family: 'Poppins', sans-serif;
     }
     .stApp {
-        background-color: #121212;
+        background: transparent;
     }
-    .stTextInput, .stButton, .stSelectbox, .stTextArea {
-        background-color: #1E1E1E !important;
-        color: white !important;
-        border-radius: 10px;
+    .css-18e3th9, .stTextInput, .stButton, .stSelectbox, .stTextArea {
+        background: rgba(20, 20, 20, 0.95);
+        color: #ffffff;
+        border-radius: 20px;
+        border: 2px solid #8a2be2;
+        padding: 14px;
+        transition: all 0.4s ease;
+    }
+    .stButton>button:hover {
+        background: linear-gradient(135deg, #8a2be2, #4b0082);
+        color: white;
+        transform: scale(1.05);
     }
     .stChatMessage {
-        background-color: #2C2C2C;
-        color: white;
-        border-radius: 10px;
-        padding: 12px;
-        margin: 5px 0;
+        background: rgba(40, 40, 40, 0.9);
+        border-radius: 20px;
+        padding: 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 4px 15px rgba(138, 43, 226, 0.5);
     }
-    .stSidebar {
-        background-color: #181818 !important;
-        color: white !important;
+    .sidebar .css-1d391kg {
+        background: linear-gradient(135deg, #8a2be2, #4b0082);
+        color: white;
+    }
+    .title {
+        text-align: center;
+        font-size: 4em;
+        font-weight: 900;
+        color: #8a2be2;
+        text-shadow: 3px 3px 12px #4b0082;
+        margin-bottom: 40px;
+    }
+    .subheading {
+        font-size: 1.5em;
+        color: #b39ddb;
+        text-align: center;
     }
     </style>
 """
-st.markdown(dark_theme, unsafe_allow_html=True)
+st.markdown(black_theme, unsafe_allow_html=True)
+
+# ✨ Configure API Key
+genai.configure(api_key="AIzaSyBj1BzzNCg6FOUeic8DTtU3uYNVMaDErQw")
 
 # 📌 Initialize session state
 if 'chat_history' not in st.session_state:
@@ -62,29 +86,32 @@ def show_mood_chart():
     if st.session_state.moods:
         df = pd.DataFrame(st.session_state.moods)
         mood_counts = df["mood"].value_counts()
-        st.bar_chart(mood_counts, use_container_width=True)
+        fig, ax = plt.subplots()
+        mood_counts.plot(kind='bar', ax=ax, color=['#8a2be2', '#4CAF50', '#FF6347', '#4682B4', '#FFA500'])
+        ax.set_title("Mood Analytics")
+        ax.set_xlabel("Mood")
+        ax.set_ylabel("Frequency")
+        st.pyplot(fig)
 
-# 🎵 Meditation Music
-def play_music():
-    music_files = [f for f in os.listdir("music") if f.endswith(".mp3")]
-    if music_files:
-        selected_music = st.selectbox("Choose meditation music:", music_files)
-        st.audio(os.path.join("music", selected_music), format="audio/mp3")
-    else:
-        st.warning("No music files found.")
+def export_csv(data, filename):
+    df = pd.DataFrame(data)
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button("Download CSV", csv, filename, "text/csv", key=filename)
 
-# 🌟 Sidebar Navigation
+# ✨ Sidebar Navigation
 st.sidebar.title("MindEase 🧘‍♂️")
-st.sidebar.markdown("---")
-page = st.sidebar.radio("Navigation", ["Chatbot", "Mood Tracker", "Journal", "Meditation Music", "Breathing Exercise", "Affirmations", "Help & Resources"], index=0)
+page = st.sidebar.radio("Navigate", ["Chatbot", "Mood Tracker", "Journal", "Meditation Music", "Breathing Exercise", "Affirmations", "Help & Resources"])
 
 # 🤖 Chatbot UI
 if page == "Chatbot":
-    st.title("Mental Health Chatbot 🤖")
+    st.markdown("<div class='title'>Mental Health Chatbot 🤖</div>", unsafe_allow_html=True)
+
     for chat in st.session_state.chat_history:
         with st.chat_message(chat["role"]):
             st.write(chat["text"])
+
     user_input = st.chat_input("How are you feeling today?")
+
     if user_input:
         st.session_state.chat_history.append({"role": "user", "text": user_input})
         response = get_gemini_response(user_input)
@@ -93,51 +120,57 @@ if page == "Chatbot":
 
 # 📊 Mood Tracker
 elif page == "Mood Tracker":
-    st.title("Mood Tracker 📊")
-    mood = st.selectbox("How do you feel today?", ["Happy", "Sad", "Anxious", "Angry", "Calm"], index=0)
-    if st.button("Log Mood", use_container_width=True):
+    st.markdown("<div class='title'>Mood Tracker 📊</div>", unsafe_allow_html=True)
+    mood = st.selectbox("How do you feel today?", ["Happy", "Sad", "Anxious", "Angry", "Calm", "Stressed", "Relaxed"])
+    if st.button("Log Mood"):
         log_mood(mood)
         st.success("Mood Logged Successfully!")
     show_mood_chart()
+    if st.session_state.moods:
+        export_csv(st.session_state.moods, "mood_log.csv")
 
-# 📖 Daily Journal
+# 📚 Daily Journal
 elif page == "Journal":
-    st.title("Daily Journal 📖")
-    entry = st.text_area("Write your thoughts here:", height=150)
-    if st.button("Save Journal", use_container_width=True):
+    st.markdown("<div class='title'>Daily Journal 📚</div>", unsafe_allow_html=True)
+    entry = st.text_area("Write your thoughts here:")
+    if st.button("Save Journal"):
         today = datetime.date.today().strftime("%Y-%m-%d")
         st.session_state.journals.append({"date": today, "entry": entry})
         st.success("Journal entry saved!")
+
     st.write("### Past Entries")
-    for journal in st.session_state.journals:
-        st.markdown(f"**{journal['date']}**: {journal['entry']}")
+    for journal in reversed(st.session_state.journals):
+        st.write(f"**{journal['date']}**: {journal['entry']}")
+
+    if st.session_state.journals:
+        export_csv(st.session_state.journals, "journal_log.csv")
 
 # 🎵 Meditation Music
 elif page == "Meditation Music":
-    st.title("Meditation & Relaxation 🎵")
-    play_music()
+    st.markdown("<div class='title'>Meditation Music 🎵</div>", unsafe_allow_html=True)
+    st.audio("https://www.bensound.com/bensound-music/bensound-relaxing.mp3")
 
 # 🌬️ Breathing Exercise
 elif page == "Breathing Exercise":
-    st.title("Breathing Exercise 🌬️")
-    st.write("Inhale deeply for 4 seconds... Hold for 4 seconds... Exhale slowly for 6 seconds... Repeat.")
-    st.image("https://i.imgur.com/2PbnHUJ.gif")
+    st.markdown("<div class='title'>Breathing Exercise 🌬️</div>", unsafe_allow_html=True)
+    st.write("Follow the guided breathing pattern:")
+    st.write("Inhale deeply...")
+    st.progress(33)
+    st.write("Hold your breath...")
+    st.progress(66)
+    st.write("Exhale slowly...")
+    st.progress(100)
 
 # ✨ Daily Affirmations
 elif page == "Affirmations":
-    st.title("Daily Affirmations ✨")
-    affirmations = [
-        "You are strong and capable.",
-        "Every day is a new opportunity.",
-        "You are enough just as you are.",
-        "You have the power to create change.",
-    ]
-    st.subheader(f"{affirmations[datetime.datetime.now().day % len(affirmations)]}")
+    st.markdown("<div class='title'>Daily Affirmations ✨</div>", unsafe_allow_html=True)
+    affirmations = ["You are strong and capable.", "Every day is a new opportunity."]
+    st.write(f"**{affirmations[datetime.datetime.now().day % len(affirmations)]}**")
 
-# 📞 Help & Resources
+# 📖 Help & Resources
 elif page == "Help & Resources":
-    st.title("Help & Resources 📞")
-    st.write("If you need urgent mental health support, consider reaching out to these resources:")
-    st.markdown("📞 **National Helpline:** 1-800-662-HELP")
-    st.markdown("🌍 **Online Support:** Visit [BetterHelp](https://www.betterhelp.com/) or [TalkSpace](https://www.talkspace.com/)")
-    st.markdown("📚 **Mental Health Articles:** Read helpful guides on stress, anxiety, and mindfulness.")
+    st.markdown("<div class='title'>Help & Resources 📖</div>", unsafe_allow_html=True)
+    st.write("### Mental Health Resources")
+    st.write("- [National Alliance on Mental Illness (NAMI)](https://www.nami.org)")
+    st.write("- [MentalHealth.gov](https://www.mentalhealth.gov)")
+    st.write("- [Crisis Text Line](https://www.crisistextline.org)")
