@@ -1,176 +1,107 @@
 import streamlit as st
-import google.generativeai as genai
-import os
-import datetime
-import pandas as pd
-import matplotlib.pyplot as plt
+import gspread
+import plotly.express as px
+from oauth2client.service_account import ServiceAccountCredentials
+import json
 
-# ✨ Set Page Config
-st.set_page_config(page_title="MindEase 🧘‍♂️", layout="wide")
+# Page config
+st.set_page_config(page_title="📚 MCQ Quiz", layout="wide", initial_sidebar_state="expanded")
+st.title("📚 MCQ Question Bank")
 
-# 🌨️ Advanced Black Theme Styling
-black_theme = """
-    <style>
-    body {
-        background: #000000;
-        color: #e0e0e0;
-        font-family: 'Poppins', sans-serif;
-    }
-    .stApp {
-        background: transparent;
-    }
-    .css-18e3th9, .stTextInput, .stButton, .stSelectbox, .stTextArea {
-        background: rgba(20, 20, 20, 0.95);
-        color: #ffffff;
-        border-radius: 20px;
-        border: 2px solid #8a2be2;
-        padding: 14px;
-        transition: all 0.4s ease;
-    }
-    .stButton>button:hover {
-        background: linear-gradient(135deg, #8a2be2, #4b0082);
-        color: white;
-        transform: scale(1.05);
-    }
-    .stChatMessage {
-        background: rgba(40, 40, 40, 0.9);
-        border-radius: 20px;
-        padding: 20px;
-        margin-bottom: 15px;
-        box-shadow: 0 4px 15px rgba(138, 43, 226, 0.5);
-    }
-    .sidebar .css-1d391kg {
-        background: linear-gradient(135deg, #8a2be2, #4b0082);
-        color: white;
-    }
-    .title {
-        text-align: center;
-        font-size: 4em;
-        font-weight: 900;
-        color: #8a2be2;
-        text-shadow: 3px 3px 12px #4b0082;
-        margin-bottom: 40px;
-    }
-    .subheading {
-        font-size: 1.5em;
-        color: #b39ddb;
-        text-align: center;
-    }
-    </style>
-"""
-st.markdown(black_theme, unsafe_allow_html=True)
+# Google Sheets authentication
+try:
+    creds_json = {
+  "type": "service_account",
+  "project_id": "gen-lang-client-0825677129",
+  "private_key_id": "863c182d09b2993ed46b34d5d2b0386e9366d750",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC/Zm47l7r748wM\n95zvVtpxUiL/XqstrIZukWaUzOXVWjCOEHmxoQGQffmtdOo/ax6GVE0oFcI/P2U/\nfZkWTgXN55NfZjIAKT0irilKoDsQGirCP7F3ljFILFpfDQ+Drdk2mdI1ZazuNqsS\nNY8ionQziQ0q4cqNOqkwG0sl0Q4J8Qy42tDqPSIotJFy4v9J4yXjo9tn6eQqsxln\n7KakYJE6mO0fnPkP9QrsPaWW4DWTOqNG/bEWed89FNA6pJSbHENk5SCj8b4OdACY\nV2ClIiNhN/bx0rOE1z2L7goFPV5qcrXD9zfr56h2H7elhfAVqDGK/zYfFhcp0WjB\nD4u6RD5TAgMBAAECggEALSh3MKM7cCvOXG7dfZCx6FO3QyYsYBHZA+RVXh07ystF\nMneLps+0hUlbq8OucvkMkif4rlD37CFCe6jgAiW1c9/D4xnDCUuxi2mo/1zvonxy\nAzOw5OSwSvV/+vYjZ2+QlLPVJ1kOZIPMd/bgBw1qOjCHRUtRlWG2Qk3mPI1m8Qwg\nBaS1m0EgPymacp7oxt0XatBV0v7AUZPoe20YvnT2uY3eaJ/y9PiEQ2OyKoBiAdgp\nPRaX0tpVrXEGGuvaxfeV00bay+/A+kAE9Rr50GWs9OiR76h5UWU3T0xjXoL/2YyX\nlXCAPGwhSWVEjkNsAxlJ3UsjQxlTgJoCttP7H9pZdQKBgQDzdQpDrig1kmSjTAMT\nGyDrsyMWx9uboA73ncMT5WhMDcjiwTHtJeKVjW5IesIQ1lDEPREFB2l4wpLvfCLR\nBRMRGweEhGV3he52EMK8x6BzWljf6Cb2myx3Bd1xXkeFq2aimOTZn9lsTmvRFsvm\nNrf/qF7sSDV9b+YPmkmkxl0B7wKBgQDJQs8mCEYJvwBkfeNZ9lIjJRM2qKOQtnpo\nz2jOh4tm6o/A4mGuwyYhsmtfKNciRoz04WoP08pRRhZNptLtb04ZMy5DGIb8u+l+\n43fzFrVYZt8913lXYDeS++qwKeOJrnE5AcM+UfGMRSFlT6gDOSPAXc3Zoln0pU6B\nm/I7bNad3QKBgQCnda8cxLOFve+ZX1SSFMv9NFgDeG93SY5iBlND4T1vat/uEUOd\nQrzrb8AW/NF2MWSWxwZo9iM3XGcjcbilG5902am/Hi6JG0feUEMTBSE5l0Cgqxf5\n8tyP9inOrDH4IODVIOPxSYGNfReuV8bi0GqZ4R+B2V1prcmKm+7h90vMYwKBgQC4\neaN0QesorclHU1icMjqRej9FP4hFce17unlfrUAqwl+nthlBXiDKjEb8v2uKQE6d\neyyDe2ab3nk9DeeSuQ5F7PK/j3DToc5hf1CIIc1xTUHc5m+Tll76PCye8pZcseeY\nEDSNIAEeyJLW0Q+4fJx3i8POc5CuvQLbrDx5GccShQKBgGBnCUgdD/pzH1qsVBNo\nGc/Dxrx5A1jpluWgq+O7+dSNScczNjII4rM8H/e5yfC1/e2gK/HA3LeIwxYWuCBT\nFpI9/ZpOC5DIawkPsm5ac9FUT+b5uXnuyEK+mecPrt1imRuhm/VL4EdhVlHnsTHy\nrdSdFMJoZKOJrPeOPSKiR5Mb\n-----END PRIVATE KEY-----\n",
+  "client_email": "data-774@gen-lang-client-0825677129.iam.gserviceaccount.com",
+  "client_id": "101552404875723380663",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/data-774%40gen-lang-client-0825677129.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
 
-# ✨ Configure API Key
-genai.configure(api_key="AIzaSyBj1BzzNCg6FOUeic8DTtU3uYNVMaDErQw")
+    client = gspread.service_account_from_dict(creds_json)
+    spreadsheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1K2HJSL0U0vay4UaW4s3QPAIkQ_noj742ZRQJxbTTbQ0")
+    worksheet = spreadsheet.get_worksheet(0)
+    raw_records = worksheet.get_all_records()
+except Exception as e:
+    st.error(f"❌ Error connecting to Google Sheets: {str(e)}")
+    st.stop()
 
-# 📌 Initialize session state
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
-if 'moods' not in st.session_state:
-    st.session_state.moods = []
-if 'journals' not in st.session_state:
-    st.session_state.journals = []
+# Page selection
+page = st.sidebar.selectbox("📑 Select a Page", ["Topic Stats", "Questions"])
 
-# 🤖 Chatbot Function
-def get_gemini_response(user_input):
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    response = model.generate_content(user_input)
-    return response.text
+# Difficulty map for sorting
+diff_map = {'Easy': 1, 'Medium': 2, 'Hard': 3}
 
-# 📊 Mood Tracker
-def log_mood(mood):
-    today = datetime.date.today().strftime("%Y-%m-%d")
-    st.session_state.moods.append({"date": today, "mood": mood})
+if page == "Topic Stats":
+    st.subheader("📊 Overview")
+    total = len(raw_records)
+    st.markdown(f"### ✅ Total Questions: {total}")
 
-def show_mood_chart():
-    if st.session_state.moods:
-        df = pd.DataFrame(st.session_state.moods)
-        mood_counts = df["mood"].value_counts()
-        fig, ax = plt.subplots()
-        mood_counts.plot(kind='bar', ax=ax, color=['#8a2be2', '#4CAF50', '#FF6347', '#4682B4', '#FFA500'])
-        ax.set_title("Mood Analytics")
-        ax.set_xlabel("Mood")
-        ax.set_ylabel("Frequency")
-        st.pyplot(fig)
+    topic_count = {}
+    difficulty_count = {}
 
-def export_csv(data, filename):
-    df = pd.DataFrame(data)
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button("Download CSV", csv, filename, "text/csv", key=filename)
+    for row in raw_records:
+        topic = row.get("Topic", "Unknown").strip().title()
+        diff = row.get("Difficulty", "Unknown").strip().title()
 
-# ✨ Sidebar Navigation
-st.sidebar.title("MindEase 🧘‍♂️")
-page = st.sidebar.radio("Navigate", ["Chatbot", "Mood Tracker", "Journal", "Meditation Music", "Breathing Exercise", "Affirmations", "Help & Resources"])
+        topic_count[topic] = topic_count.get(topic, 0) + 1
+        difficulty_count[diff] = difficulty_count.get(diff, 0) + 1
 
-# 🤖 Chatbot UI
-if page == "Chatbot":
-    st.markdown("<div class='title'>Mental Health Chatbot 🤖</div>", unsafe_allow_html=True)
+    # 👉 Total Topics
+    st.markdown(f"### 🧠 Total Topics: {len(topic_count)}")
 
-    for chat in st.session_state.chat_history:
-        with st.chat_message(chat["role"]):
-            st.write(chat["text"])
+    # 📋 Topic-wise Question Count Table
+    topic_table = [{"Topic": t, "No. of Questions": c} for t, c in sorted(topic_count.items(), key=lambda x: x[1], reverse=True)]
+    st.markdown("### 📋 Topic-wise Question Count")
+    st.table(topic_table)
 
-    user_input = st.chat_input("How are you feeling today?")
+    # 🥧 Top 10 Topics Pie Chart
+    top_topics = dict(sorted(topic_count.items(), key=lambda x: x[1], reverse=True)[:10])
+    fig1 = px.pie(names=list(top_topics.keys()), values=list(top_topics.values()), title="Top 10 Topics")
+    st.plotly_chart(fig1, use_container_width=True)
 
-    if user_input:
-        st.session_state.chat_history.append({"role": "user", "text": user_input})
-        response = get_gemini_response(user_input)
-        st.session_state.chat_history.append({"role": "ai", "text": response})
-        st.rerun()
+    # 📊 Difficulty Distribution Bar Chart
+    fig2 = px.bar(
+        x=list(difficulty_count.keys()),
+        y=list(difficulty_count.values()),
+        labels={'x': 'Difficulty', 'y': 'Questions'},
+        title='Difficulty Distribution',
+        color=list(difficulty_count.values()),
+        color_continuous_scale='Blues'
+    )
+    fig2.update_layout(coloraxis_showscale=False)
+    st.plotly_chart(fig2, use_container_width=True)
 
-# 📊 Mood Tracker
-elif page == "Mood Tracker":
-    st.markdown("<div class='title'>Mood Tracker 📊</div>", unsafe_allow_html=True)
-    mood = st.selectbox("How do you feel today?", ["Happy", "Sad", "Anxious", "Angry", "Calm", "Stressed", "Relaxed"])
-    if st.button("Log Mood"):
-        log_mood(mood)
-        st.success("Mood Logged Successfully!")
-    show_mood_chart()
-    if st.session_state.moods:
-        export_csv(st.session_state.moods, "mood_log.csv")
+elif page == "Questions":
+    topics = sorted(set(row.get("Topic", "Unknown").strip().title() for row in raw_records))
+    selected_topic = st.sidebar.selectbox("📌 Select Topic", topics)
 
-# 📚 Daily Journal
-elif page == "Journal":
-    st.markdown("<div class='title'>Daily Journal 📚</div>", unsafe_allow_html=True)
-    entry = st.text_area("Write your thoughts here:")
-    if st.button("Save Journal"):
-        today = datetime.date.today().strftime("%Y-%m-%d")
-        st.session_state.journals.append({"date": today, "entry": entry})
-        st.success("Journal entry saved!")
+    filtered = [r for r in raw_records if r.get("Topic", "").strip().title() == selected_topic]
+    diff_levels = sorted(set(r.get("Difficulty", "Unknown").strip().title() for r in filtered))
+    selected_diff = st.sidebar.selectbox("🎚️ Select Difficulty", ["All"] + diff_levels)
 
-    st.write("### Past Entries")
-    for journal in reversed(st.session_state.journals):
-        st.write(f"**{journal['date']}**: {journal['entry']}")
+    if selected_diff != "All":
+        filtered = [r for r in filtered if r.get("Difficulty", "").strip().title() == selected_diff]
 
-    if st.session_state.journals:
-        export_csv(st.session_state.journals, "journal_log.csv")
+    for idx, row in enumerate(filtered, 1):
+        st.markdown(f"### Question {idx}")
+        st.write(row.get("Question", "N/A"))
 
-# 🎵 Meditation Music
-elif page == "Meditation Music":
-    st.markdown("<div class='title'>Meditation Music 🎵</div>", unsafe_allow_html=True)
-    st.audio("https://www.bensound.com/bensound-music/bensound-relaxing.mp3")
+        options = row.get("Options", "").split(";")
+        for opt in options:
+            st.markdown(f"- {opt.strip()}")
 
-# 🌬️ Breathing Exercise
-elif page == "Breathing Exercise":
-    st.markdown("<div class='title'>Breathing Exercise 🌬️</div>", unsafe_allow_html=True)
-    st.write("Follow the guided breathing pattern:")
-    st.write("Inhale deeply...")
-    st.progress(33)
-    st.write("Hold your breath...")
-    st.progress(66)
-    st.write("Exhale slowly...")
-    st.progress(100)
+        correct = row.get("Correct Answer", "").strip().upper()
+        opt_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
+        if correct in opt_map and opt_map[correct] < len(options):
+            st.success(f"✅ Answer: {options[opt_map[correct]].strip()}")
+        else:
+            st.error("❌ Invalid Answer")
 
-# ✨ Daily Affirmations
-elif page == "Affirmations":
-    st.markdown("<div class='title'>Daily Affirmations ✨</div>", unsafe_allow_html=True)
-    affirmations = ["You are strong and capable.", "Every day is a new opportunity."]
-    st.write(f"**{affirmations[datetime.datetime.now().day % len(affirmations)]}**")
-
-# 📖 Help & Resources
-elif page == "Help & Resources":
-    st.markdown("<div class='title'>Help & Resources 📖</div>", unsafe_allow_html=True)
-    st.write("### Mental Health Resources")
-    st.write("- [National Alliance on Mental Illness (NAMI)](https://www.nami.org)")
-    st.write("- [MentalHealth.gov](https://www.mentalhealth.gov)")
-    st.write("- [Crisis Text Line](https://www.crisistextline.org)")
+        st.markdown("---")
